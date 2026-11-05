@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="SmartPalm.IngestionService.API/SmartPalm.IngestionService.API.csproj" />
+  <Project Path="SmartPalm.IngestionService.API.Tests/SmartPalm.IngestionService.API.Tests.csproj" />
+</Solution>

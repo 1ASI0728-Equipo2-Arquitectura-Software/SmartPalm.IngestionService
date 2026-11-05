@@ -1,0 +1,8 @@
+@host = http://localhost:5104
+GET {{host}}/health/ready
+
+###
+POST {{host}}/api/v1/edge-gateways/AA:BB:CC:DD:EE:01/sensor-readings
+Content-Type: application/json
+
+{"devices":[{"deviceMac":"11:22:33:44:55:66","readings":[{"sensorType":"Temperature","measuredAt":"2026-10-02T12:00:00Z","value":28.4}]}],"syncedAt":"2026-10-02T12:00:00Z"}
