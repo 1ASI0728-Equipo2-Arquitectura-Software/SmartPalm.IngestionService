@@ -22,7 +22,7 @@ public static class DependencyInjection
         services.AddScoped<IAuthorizedDeviceProjectionRepository, AuthorizedDeviceProjectionRepository>();
         services.AddScoped<IAccountPlanProjectionRepository, AccountPlanProjectionRepository>();
         services.AddScoped<IUnitOfWork>(p => p.GetRequiredService<IngestionDbContext>()); services.AddScoped<IIntegrationEventWriter, IntegrationEventWriter>(); services.AddScoped<IInbox, Inbox>();
-        services.AddScoped<IngestionCommandService>(); services.AddScoped<IngestionQueryService>(); services.AddScoped<IntegrationEventHandlers>();
+        services.AddScoped<IngestionCommandService>(); services.AddScoped<IngestionQueryService>(); services.AddScoped<IntegrationEventHandlers>(); services.AddScoped<UserDeletionEventHandler>();
         services.AddHostedService<OutboxPublisher>(); services.AddHostedService<IntegrationEventConsumer>(); return services;
     }
 }
