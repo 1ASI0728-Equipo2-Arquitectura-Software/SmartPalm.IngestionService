@@ -40,10 +40,16 @@ public class IngestionApiContainerTests : IAsyncLifetime
                 JsonSerializer.SerializeToUtf8Bytes(new { edgeMac = "AA:BB:CC:DD:EE:01", monitoringZoneId = 1, ownerUserId = 42, credentialHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("gateway-test-key"))), createdAt = DateTime.UtcNow }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
             await channel.BasicPublishAsync("smartpalm.events", "crop.sector-assigned.v1", false,
                 new BasicProperties { Persistent = true, MessageId = Guid.NewGuid().ToString(), Type = "crop.sector-assigned.v1", ContentType = "application/json" },
-                JsonSerializer.SerializeToUtf8Bytes(new { sectorId = 7, plantationId = 1, iotDeviceMacAddress = "SMART-PALM-001", sectorName = "North", occurredAt = DateTime.UtcNow }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+                JsonSerializer.SerializeToUtf8Bytes(new { sectorId = 7, plantationId = 1, iotDeviceMacAddress = (string?)null, sectorName = "North", occurredAt = DateTime.UtcNow }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
             await channel.BasicPublishAsync("smartpalm.events", "smartpalm.identity.subscription-activated.v1", false,
                 new BasicProperties { Persistent = true, MessageId = Guid.NewGuid().ToString(), Type = "smartpalm.identity.subscription-activated.v1", ContentType = "application/json" },
-                JsonSerializer.SerializeToUtf8Bytes(new { userId = 42, activatedAt = DateTime.UtcNow }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+                JsonSerializer.SerializeToUtf8Bytes(new
+                {
+                    eventId = Guid.NewGuid(),
+                    payload = new { userId = 42, activatedAt = DateTime.UtcNow },
+                    eventType = "smartpalm.identity.subscription-activated.v1",
+                    schemaVersion = 1
+                }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
             await Task.Delay(700);
             seeded = await ScalarAsync("SELECT COUNT(*) FROM ingestion.agronomic_thresholds") == 5;
         }

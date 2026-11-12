@@ -51,6 +51,11 @@ public class IntegrationEventHandlers(
                 message.OwnerUserId,
                 message.PlantationId,
                 message.SectorId);
+
+            var sector = await sectors.FindAsync(message.SectorId, ct);
+            if (sector is null)
+                await sectors.AddAsync(new SectorDeviceProjection(message.SectorId, message.IotDeviceMacAddress), ct);
+            else sector.Assign(message.IotDeviceMacAddress);
         }, token);
 
     public Task HandleAsync(Guid messageId, SubscriptionActivatedIntegrationEvent message, CancellationToken token) =>
