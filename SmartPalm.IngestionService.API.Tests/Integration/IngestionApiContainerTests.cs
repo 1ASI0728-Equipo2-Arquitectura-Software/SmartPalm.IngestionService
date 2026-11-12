@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
@@ -32,21 +33,41 @@ public class IngestionApiContainerTests : IAsyncLifetime
         for (var attempt = 0; attempt < 10 && !seeded; attempt++)
         {
             var properties = new BasicProperties { Persistent = true, MessageId = messageId.ToString(), Type = "device.iot-device-registered.v1", ContentType = "application/json" };
-            var payload = JsonSerializer.SerializeToUtf8Bytes(new { edgeDeviceMacAddress = "AA:BB:CC:DD:EE:01", iotDeviceMacAddress = "SMART-PALM-001", plantationId = 1, createdAt = DateTime.UtcNow }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            var payload = JsonSerializer.SerializeToUtf8Bytes(new { edgeDeviceMacAddress = "AA:BB:CC:DD:EE:01", iotDeviceMacAddress = "SMART-PALM-001", plantationId = 1, ownerUserId = 42, sectorId = 7, createdAt = DateTime.UtcNow }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
             await channel.BasicPublishAsync("smartpalm.events", "device.iot-device-registered.v1", false, properties, payload);
+            await channel.BasicPublishAsync("smartpalm.events", "device.edge-gateway-registered.v1", false,
+                new BasicProperties { Persistent = true, MessageId = Guid.NewGuid().ToString(), Type = "device.edge-gateway-registered.v1", ContentType = "application/json" },
+                JsonSerializer.SerializeToUtf8Bytes(new { edgeMac = "AA:BB:CC:DD:EE:01", monitoringZoneId = 1, ownerUserId = 42, credentialHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("gateway-test-key"))), createdAt = DateTime.UtcNow }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+            await channel.BasicPublishAsync("smartpalm.events", "crop.sector-assigned.v1", false,
+                new BasicProperties { Persistent = true, MessageId = Guid.NewGuid().ToString(), Type = "crop.sector-assigned.v1", ContentType = "application/json" },
+                JsonSerializer.SerializeToUtf8Bytes(new { sectorId = 7, plantationId = 1, iotDeviceMacAddress = "SMART-PALM-001", sectorName = "North", occurredAt = DateTime.UtcNow }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+            await channel.BasicPublishAsync("smartpalm.events", "smartpalm.identity.subscription-activated.v1", false,
+                new BasicProperties { Persistent = true, MessageId = Guid.NewGuid().ToString(), Type = "smartpalm.identity.subscription-activated.v1", ContentType = "application/json" },
+                JsonSerializer.SerializeToUtf8Bytes(new { userId = 42, activatedAt = DateTime.UtcNow }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
             await Task.Delay(700);
             seeded = await ScalarAsync("SELECT COUNT(*) FROM ingestion.agronomic_thresholds") == 5;
         }
         Assert.True(seeded, "Device integration event did not seed thresholds.");
-        Assert.Equal(1, await ScalarAsync("SELECT COUNT(*) FROM ingestion.inbox_messages"));
+        var authorized = false;
+        for (var attempt = 0; attempt < 10 && !authorized; attempt++)
+        {
+            authorized = await ScalarAsync("SELECT COUNT(*) FROM ingestion.authorized_device_projections WHERE owner_user_id = 42") == 1
+                && await ScalarAsync("SELECT COUNT(*) FROM ingestion.gateway_authorization_projections WHERE owner_user_id = 42 AND is_active") == 1
+                && await ScalarAsync("SELECT COUNT(*) FROM ingestion.account_plan_projections WHERE owner_user_id = 42 AND active") == 1;
+            if (!authorized) await Task.Delay(700);
+        }
+        Assert.True(authorized, "Ownership projections were not synchronized.");
+        Assert.True(await ScalarAsync("SELECT COUNT(*) FROM ingestion.inbox_messages") >= 4);
 
         var syncedAt = DateTime.UtcNow;
         var body = new { devices = new[] { new { deviceMac = "smart-palm-001", readings = new[] { new { sensorType = "Temperature", measuredAt = syncedAt, value = 45.0 } } } }, syncedAt };
+        client.DefaultRequestHeaders.Add("X-Gateway-Key", "gateway-test-key");
         var first = await client.PostAsJsonAsync("/api/v1/edge-gateways/aa:bb:cc:dd:ee:01/sensor-readings", body);
         var second = await client.PostAsJsonAsync("/api/v1/edge-gateways/aa:bb:cc:dd:ee:01/sensor-readings", body);
         Assert.Equal(HttpStatusCode.Created, first.StatusCode); Assert.Equal(HttpStatusCode.Created, second.StatusCode);
         var duplicate = await second.Content.ReadFromJsonAsync<IngestionResponse>(); Assert.True(duplicate?.Duplicate);
         Assert.Equal(1, await ScalarAsync("SELECT COUNT(*) FROM ingestion.sensor_readings"));
+        Assert.Equal(1, await ScalarAsync("SELECT COUNT(*) FROM ingestion.sensor_readings WHERE owner_user_id = 42 AND plantation_id = 1 AND sector_id = 7"));
         Assert.Equal(1, await ScalarAsync("SELECT COUNT(*) FROM ingestion.ingestion_batches"));
 
         var published = false;

@@ -27,5 +27,8 @@ public class EdgeGatewaySensorReadingsController(IngestionCommandService command
         string gatewayMac, [FromQuery] DateTime? from, [FromQuery] DateTime? to,
         [FromQuery] string? deviceMac, [FromQuery] int page = 1, [FromQuery] int size = 100,
         CancellationToken token = default) => Ok(await queries.HandleAsync(new GetGatewayReadingsQuery(
-            gatewayMac, from ?? DateTime.MinValue, to ?? DateTime.MaxValue, deviceMac, page, size), token));
+            OwnerId(), gatewayMac, from ?? DateTime.MinValue, to ?? DateTime.MaxValue, deviceMac, page, size), token));
+
+    private long OwnerId() => long.TryParse(User.FindFirst("sub")?.Value, out var ownerId) && ownerId > 0
+        ? ownerId : throw new UnauthorizedAccessException("JWT subject is required.");
 }

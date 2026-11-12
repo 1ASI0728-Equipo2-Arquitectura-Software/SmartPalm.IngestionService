@@ -13,5 +13,8 @@ public class DeviceSensorReadingsController(IngestionQueryService queries) : Con
     public async Task<ActionResult<IReadOnlyList<SensorReadingResponse>>> GetDeviceSensorReadings(
         string deviceMac, [FromQuery] DateTime? from, [FromQuery] DateTime? to,
         [FromQuery] int page = 1, [FromQuery] int size = 100, CancellationToken token = default) =>
-        Ok(await queries.HandleAsync(new GetDeviceReadingsQuery(deviceMac, from ?? DateTime.MinValue, to ?? DateTime.MaxValue, page, size), token));
+        Ok(await queries.HandleAsync(new GetDeviceReadingsQuery(OwnerId(), deviceMac, from ?? DateTime.MinValue, to ?? DateTime.MaxValue, page, size), token));
+
+    private long OwnerId() => long.TryParse(User.FindFirst("sub")?.Value, out var ownerId) && ownerId > 0
+        ? ownerId : throw new UnauthorizedAccessException("JWT subject is required.");
 }
