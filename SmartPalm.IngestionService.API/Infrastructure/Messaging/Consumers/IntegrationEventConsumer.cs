@@ -36,7 +36,8 @@ internal class IntegrationEventConsumer(IServiceScopeFactory scopes, IOptions<Ra
             "crop.sector-assigned.v1",
             "crop.sector-removed.v1",
             "smartpalm.identity.subscription-activated.v1",
-            "smartpalm.identity.subscription-cancelled.v1"
+            "smartpalm.identity.subscription-cancelled.v1",
+            "smartpalm.identity.user-deletion-requested.v1"
         })
             await channel.QueueBindAsync(_options.Queue, _options.Exchange, key, cancellationToken: token);
         await channel.BasicQosAsync(0, 10, false, token);
@@ -48,15 +49,18 @@ internal class IntegrationEventConsumer(IServiceScopeFactory scopes, IOptions<Ra
                 var type = args.BasicProperties.Type ?? args.RoutingKey;
                 var id = Guid.TryParse(args.BasicProperties.MessageId, out var parsed) ? parsed : Guid.NewGuid();
                 using var scope = scopes.CreateScope(); var handlers = scope.ServiceProvider.GetRequiredService<IntegrationEventHandlers>();
-                var body = args.Body.Span;
+                var body = args.Body.ToArray();
                 switch (type)
                 {
-                    case "device.edge-gateway-registered.v1": await handlers.HandleAsync(id, JsonSerializer.Deserialize<EdgeGatewayRegisteredIntegrationEvent>(body, JsonOptions)!, token); break;
-                    case "device.iot-device-registered.v1": await handlers.HandleAsync(id, JsonSerializer.Deserialize<IotDeviceRegisteredIntegrationEvent>(body, JsonOptions)!, token); break;
-                    case "crop.sector-assigned.v1": await handlers.HandleAsync(id, JsonSerializer.Deserialize<SectorAssignedIntegrationEvent>(body, JsonOptions)!, token); break;
-                    case "crop.sector-removed.v1": await handlers.HandleAsync(id, JsonSerializer.Deserialize<SectorRemovedIntegrationEvent>(body, JsonOptions)!, token); break;
-                    case "smartpalm.identity.subscription-activated.v1": await handlers.HandleAsync(id, JsonSerializer.Deserialize<SubscriptionActivatedIntegrationEvent>(body, JsonOptions)!, token); break;
-                    case "smartpalm.identity.subscription-cancelled.v1": await handlers.HandleAsync(id, JsonSerializer.Deserialize<SubscriptionCancelledIntegrationEvent>(body, JsonOptions)!, token); break;
+                    case "device.edge-gateway-registered.v1": await handlers.HandleAsync(id, ReadPayload<EdgeGatewayRegisteredIntegrationEvent>(body), token); break;
+                    case "device.iot-device-registered.v1": await handlers.HandleAsync(id, ReadPayload<IotDeviceRegisteredIntegrationEvent>(body), token); break;
+                    case "crop.sector-assigned.v1": await handlers.HandleAsync(id, ReadPayload<SectorAssignedIntegrationEvent>(body), token); break;
+                    case "crop.sector-removed.v1": await handlers.HandleAsync(id, ReadPayload<SectorRemovedIntegrationEvent>(body), token); break;
+                    case "smartpalm.identity.subscription-activated.v1": await handlers.HandleAsync(id, ReadPayload<SubscriptionActivatedIntegrationEvent>(body), token); break;
+                    case "smartpalm.identity.subscription-cancelled.v1": await handlers.HandleAsync(id, ReadPayload<SubscriptionCancelledIntegrationEvent>(body), token); break;
+                    case "smartpalm.identity.user-deletion-requested.v1": await scope.ServiceProvider
+                        .GetRequiredService<UserDeletionEventHandler>()
+                        .HandleAsync(ReadPayload<UserDeletionRequestedIntegrationEvent>(body), token); break;
                 }
                 await channel.BasicAckAsync(args.DeliveryTag, false, token);
             }
@@ -64,5 +68,15 @@ internal class IntegrationEventConsumer(IServiceScopeFactory scopes, IOptions<Ra
         };
         await channel.BasicConsumeAsync(_options.Queue, false, consumer, token);
         await Task.Delay(Timeout.InfiniteTimeSpan, token);
+    }
+
+    private static T ReadPayload<T>(byte[] body)
+    {
+        using var document = JsonDocument.Parse(body);
+        var payload = document.RootElement.TryGetProperty("payload", out var value)
+            ? value
+            : document.RootElement;
+        return payload.Deserialize<T>(JsonOptions)
+            ?? throw new JsonException($"Invalid {typeof(T).Name} payload.");
     }
 }

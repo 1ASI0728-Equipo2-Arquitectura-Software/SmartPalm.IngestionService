@@ -12,12 +12,15 @@ public class SectorDataController(IngestionQueryService queries) : ControllerBas
     [HttpGet("{sectorId:long}/health")]
     public async Task<ActionResult<SectorHealthResponse>> GetSectorHealth(long sectorId, CancellationToken token)
     {
-        var result = await queries.HandleAsync(new GetSectorHealthQuery(sectorId), token);
+        var result = await queries.HandleAsync(new GetSectorHealthQuery(OwnerId(), sectorId), token);
         return result is null ? NotFound(new { message = "Sector not found or has no IoT device assigned." }) : Ok(result);
     }
 
     [HttpGet("{sectorId:long}/sensor-readings")]
     public async Task<ActionResult<IReadOnlyList<SensorReadingResponse>>> GetSectorSensorReadings(
         long sectorId, [FromQuery] DateTime? from, [FromQuery] DateTime? to, CancellationToken token) =>
-        Ok(await queries.HandleAsync(new GetSectorReadingsQuery(sectorId, from ?? DateTime.MinValue, to ?? DateTime.MaxValue), token));
+        Ok(await queries.HandleAsync(new GetSectorReadingsQuery(OwnerId(), sectorId, from ?? DateTime.MinValue, to ?? DateTime.MaxValue), token));
+
+    private long OwnerId() => long.TryParse(User.FindFirst("sub")?.Value, out var ownerId) && ownerId > 0
+        ? ownerId : throw new UnauthorizedAccessException("JWT subject is required.");
 }

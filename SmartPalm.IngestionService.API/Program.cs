@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.OpenApi;
 using Microsoft.IdentityModel.Tokens;
 using SmartPalm.IngestionService.Api;
+using SmartPalm.IngestionService.Application.Exceptions;
 using SmartPalm.IngestionService.Infrastructure;
 using SmartPalm.IngestionService.Infrastructure.Persistence;
 
@@ -41,6 +42,7 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
     context.Response.StatusCode = ex switch
     {
         UnauthorizedAccessException => 401,
+        ForbiddenAccessException => 403,
         KeyNotFoundException => 404,
         ArgumentException => 400,
         InvalidOperationException => 409,
