@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using SmartPalm.IngestionService.Application.Abstractions;
 using SmartPalm.IngestionService.Application.Contracts;
+using SmartPalm.IngestionService.Application.Exceptions;
 using SmartPalm.IngestionService.Domain.Model.Commands;
 using SmartPalm.IngestionService.Domain.Events;
 using SmartPalm.IngestionService.Domain.Readings;
@@ -15,6 +16,8 @@ public class IngestionCommandService(
     IIngestionBatchRepository batches,
     IGatewayAuthorizationProjectionRepository gatewayAuthorizations,
     IAuthorizedDeviceProjectionRepository authorizedDevices,
+    IAccountPlanProjectionRepository plans,
+    ISectorProjectionRepository sectors,
     IUnitOfWork unitOfWork,
     IIntegrationEventWriter events)
 {
@@ -24,8 +27,10 @@ public class IngestionCommandService(
         var gateway = SensorReading.NormalizeIdentifier(command.GatewayMac);
         var authorization = await gatewayAuthorizations.FindAsync(gateway, cancellationToken)
             ?? throw new UnauthorizedAccessException("Gateway is not provisioned for cloud ingestion.");
-        if (!authorization.IsActive || !authorization.PlanActive)
-            throw new UnauthorizedAccessException("Gateway owner does not have an active capture plan.");
+        if (!authorization.IsActive)
+            throw new ForbiddenAccessException("Gateway is inactive.");
+        if ((await plans.FindAsync(authorization.OwnerUserId, cancellationToken))?.Active != true)
+            throw new ForbiddenAccessException("Gateway owner account or plan is inactive.");
         if (string.IsNullOrWhiteSpace(command.GatewayCredential))
             throw new UnauthorizedAccessException("Gateway credential is required.");
         var providedHash = Convert.ToHexString(SHA256.HashData(
@@ -42,9 +47,12 @@ public class IngestionCommandService(
             var device = await authorizedDevices.FindAsync(deviceMac, cancellationToken)
                 ?? throw new UnauthorizedAccessException($"IoT device '{deviceMac}' is not provisioned.");
             if (!device.IsActive || device.GatewayMac != gateway || device.OwnerUserId != authorization.OwnerUserId)
-                throw new UnauthorizedAccessException($"IoT device '{deviceMac}' does not belong to this gateway account.");
+                throw new ForbiddenAccessException($"IoT device '{deviceMac}' does not belong to this gateway account.");
             if (device.SectorId <= 0 || device.PlantationId <= 0)
-                throw new InvalidOperationException($"IoT device '{deviceMac}' has no plantation sector assignment.");
+                throw new ForbiddenAccessException($"IoT device '{deviceMac}' has no plantation sector assignment.");
+            var sector = await sectors.FindAsync(device.SectorId, cancellationToken);
+            if (sector is null || sector.IotDeviceMacAddress != device.DeviceMac)
+                throw new ForbiddenAccessException($"IoT device '{deviceMac}' has no valid sector assignment.");
             deviceAuthorizations[deviceMac] = device;
         }
         var fingerprint = Fingerprint(gateway, command);
@@ -90,6 +98,17 @@ public class IngestionCommandService(
             ?? throw new KeyNotFoundException($"IoT device '{command.DeviceMac}' or threshold '{command.Type}' not found.");
         threshold.Update(command.Min, command.Max, command.Description);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task UpdateThresholdAsync(UpdateAgronomicThresholdCommand command, long ownerUserId, CancellationToken cancellationToken)
+    {
+        if ((await plans.FindAsync(ownerUserId, cancellationToken))?.Active != true)
+            throw new ForbiddenAccessException("The authenticated owner account or plan is inactive.");
+        var device = await authorizedDevices.FindAsync(command.DeviceMac, cancellationToken);
+        if (device is null) throw new KeyNotFoundException($"IoT device '{command.DeviceMac}' not found.");
+        if (!device.IsActive || device.OwnerUserId != ownerUserId)
+            throw new ForbiddenAccessException("IoT device is not authorized for the authenticated owner.");
+        await UpdateThresholdAsync(command, cancellationToken);
     }
 
     private static string Fingerprint(string gateway, IngestSensorReadingsCommand command)

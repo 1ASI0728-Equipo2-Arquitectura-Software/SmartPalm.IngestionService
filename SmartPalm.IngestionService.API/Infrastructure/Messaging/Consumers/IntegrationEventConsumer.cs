@@ -52,12 +52,12 @@ internal class IntegrationEventConsumer(IServiceScopeFactory scopes, IOptions<Ra
                 var body = args.Body.ToArray();
                 switch (type)
                 {
-                    case "device.edge-gateway-registered.v1": await handlers.HandleAsync(id, JsonSerializer.Deserialize<EdgeGatewayRegisteredIntegrationEvent>(body, JsonOptions)!, token); break;
-                    case "device.iot-device-registered.v1": await handlers.HandleAsync(id, JsonSerializer.Deserialize<IotDeviceRegisteredIntegrationEvent>(body, JsonOptions)!, token); break;
-                    case "crop.sector-assigned.v1": await handlers.HandleAsync(id, JsonSerializer.Deserialize<SectorAssignedIntegrationEvent>(body, JsonOptions)!, token); break;
-                    case "crop.sector-removed.v1": await handlers.HandleAsync(id, JsonSerializer.Deserialize<SectorRemovedIntegrationEvent>(body, JsonOptions)!, token); break;
-                    case "smartpalm.identity.subscription-activated.v1": await handlers.HandleAsync(id, JsonSerializer.Deserialize<SubscriptionActivatedIntegrationEvent>(body, JsonOptions)!, token); break;
-                    case "smartpalm.identity.subscription-cancelled.v1": await handlers.HandleAsync(id, JsonSerializer.Deserialize<SubscriptionCancelledIntegrationEvent>(body, JsonOptions)!, token); break;
+                    case "device.edge-gateway-registered.v1": await handlers.HandleAsync(id, ReadPayload<EdgeGatewayRegisteredIntegrationEvent>(body), token); break;
+                    case "device.iot-device-registered.v1": await handlers.HandleAsync(id, ReadPayload<IotDeviceRegisteredIntegrationEvent>(body), token); break;
+                    case "crop.sector-assigned.v1": await handlers.HandleAsync(id, ReadPayload<SectorAssignedIntegrationEvent>(body), token); break;
+                    case "crop.sector-removed.v1": await handlers.HandleAsync(id, ReadPayload<SectorRemovedIntegrationEvent>(body), token); break;
+                    case "smartpalm.identity.subscription-activated.v1": await handlers.HandleAsync(id, ReadPayload<SubscriptionActivatedIntegrationEvent>(body), token); break;
+                    case "smartpalm.identity.subscription-cancelled.v1": await handlers.HandleAsync(id, ReadPayload<SubscriptionCancelledIntegrationEvent>(body), token); break;
                     case "smartpalm.identity.user-deletion-requested.v1": await scope.ServiceProvider
                         .GetRequiredService<UserDeletionEventHandler>()
                         .HandleAsync(ReadPayload<UserDeletionRequestedIntegrationEvent>(body), token); break;

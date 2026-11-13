@@ -1,3 +1,3 @@
 namespace SmartPalm.IngestionService.Domain.Model.Queries;
 
-public record GetDeviceThresholdsQuery(string DeviceMac);
+public record GetDeviceThresholdsQuery(long OwnerUserId, string DeviceMac);

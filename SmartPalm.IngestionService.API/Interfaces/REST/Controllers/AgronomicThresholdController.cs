@@ -13,11 +13,14 @@ public class AgronomicThresholdController(IngestionCommandService commands, Inge
 {
     [HttpGet("{deviceMac}/thresholds")]
     public async Task<ActionResult<IReadOnlyList<ThresholdResponse>>> GetAgronomicThreshold(string deviceMac, CancellationToken token) =>
-        Ok(await queries.HandleAsync(new GetDeviceThresholdsQuery(deviceMac), token));
+        Ok(await queries.HandleAsync(new GetDeviceThresholdsQuery(OwnerId(), deviceMac), token));
 
     [HttpPatch("{deviceMac}/thresholds")]
     public async Task<IActionResult> UpdateAgronomicThreshold(string deviceMac, UpdateAgronomicThresholdResource resource, CancellationToken token)
     {
-        await commands.UpdateThresholdAsync(resource.ToCommand(deviceMac), token); return Ok();
+        await commands.UpdateThresholdAsync(resource.ToCommand(deviceMac), OwnerId(), token); return Ok();
     }
+
+    private long OwnerId() => long.TryParse(User.FindFirst("sub")?.Value, out var ownerId) && ownerId > 0
+        ? ownerId : throw new UnauthorizedAccessException("JWT subject is required.");
 }
