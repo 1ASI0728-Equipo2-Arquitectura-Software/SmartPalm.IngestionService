@@ -19,11 +19,34 @@ El servicio es deliberadamente independiente del buffer local del Edge Node: Edg
 ## Ejecución local
 
 1. Copiar `.env.example` a `.env`.
-2. Usar el mismo `JWT_KEY` de Identity Service.
-3. Levantar PostgreSQL con `docker compose -f compose.local.yaml --env-file .env up -d`.
-4. Ejecutar `dotnet run --project SmartPalm.IngestionService.API`.
+2. Reemplazar los valores placeholder y usar el mismo `JWT_KEY` configurado en Identity Service.
+3. Levantar PostgreSQL y RabbitMQ: `docker compose -f compose.local.yaml --env-file .env --profile isolated up -d`.
+4. Levantar la API: `docker compose -f compose.local.yaml --env-file .env --profile api up -d --build`.
 
-Los perfiles `isolated` y `api` permiten levantar RabbitMQ y la API en contenedores. El archivo raíz de `Code` no es necesario.
+El Compose despliega únicamente hacia los servicios configurados. Para probar con PostgreSQL y RabbitMQ remotos, sobrescribe `POSTGRES_CONNECTION_STRING` y `RABBITMQ_URI` en `.env`.
+
+## Despliegue en Vultr con Coolify
+
+Coolify debe clonar este repositorio desde la rama de despliegue y usar `Dockerfile` como build pack. El puerto interno es `8080`; el health check debe ser `/health/ready` y el entorno debe ser `Production`.
+
+Registra las siguientes variables como secretos de la aplicación en Coolify:
+
+```text
+ASPNETCORE_ENVIRONMENT=Production
+ASPNETCORE_URLS=http://+:8080
+ConnectionStrings__IngestionDatabase=Host=<IP privada Vultr 2>;Port=5432;Database=smartpalm_ingestion;Username=smartpalm_ingestion;Password=<secreto>
+Jwt__Issuer=smartpalm.identity
+Jwt__Audience=smartpalm.clients
+Jwt__Key=<misma clave compartida de Identity Service>
+RabbitMq__Enabled=true
+RabbitMq__Uri=amqp://<usuario>:<password>@<IP privada Vultr 2>:5672/
+RabbitMq__Exchange=smartpalm.events
+RabbitMq__Queue=smartpalm.ingestion
+```
+
+No publiques PostgreSQL, RabbitMQ ni los puertos internos del microservicio. La base y el broker deben estar restringidos a la red privada. El servicio aplica las migraciones EF Core al iniciar y reintenta hasta diez veces una conexión fallida.
+
+Como alternativa operativa, `compose.deploy.yaml` ejecuta la imagen desde Docker Compose con las mismas variables. Las cadenas del archivo pueden resolverse desde `.env`; nunca almacenes credenciales reales en el repositorio.
 
 ## Contrato Edge API
 

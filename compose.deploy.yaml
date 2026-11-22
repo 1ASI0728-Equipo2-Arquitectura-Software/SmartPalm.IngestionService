@@ -1,0 +1,18 @@
+services:
+  ingestion-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__IngestionDatabase: ${ConnectionStrings__IngestionDatabase}
+      Jwt__Issuer: ${Jwt__Issuer:-smartpalm.identity}
+      Jwt__Audience: ${Jwt__Audience:-smartpalm.clients}
+      Jwt__Key: ${Jwt__Key}
+      RabbitMq__Enabled: ${RabbitMq__Enabled:-true}
+      RabbitMq__Uri: ${RabbitMq__Uri}
+      RabbitMq__Exchange: ${RabbitMq__Exchange:-smartpalm.events}
+      RabbitMq__Queue: ${RabbitMq__Queue:-smartpalm.ingestion}
+    expose: ["8080"]
+    restart: unless-stopped

@@ -9,4 +9,6 @@ RUN dotnet publish SmartPalm.IngestionService.API/SmartPalm.IngestionService.API
 FROM runtime AS final
 WORKDIR /app
 COPY --from=build /app/publish .
+HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=10 \
+  CMD bash -lc 'exec 3<>/dev/tcp/127.0.0.1/8080'
 ENTRYPOINT ["dotnet", "SmartPalm.IngestionService.API.dll"]
