@@ -9,4 +9,9 @@ RUN dotnet publish SmartPalm.IngestionService.API/SmartPalm.IngestionService.API
 FROM runtime AS final
 WORKDIR /app
 COPY --from=build /app/publish .
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=10 \
+  CMD curl --fail --silent http://localhost:8080/health/ready || exit 1
 ENTRYPOINT ["dotnet", "SmartPalm.IngestionService.API.dll"]

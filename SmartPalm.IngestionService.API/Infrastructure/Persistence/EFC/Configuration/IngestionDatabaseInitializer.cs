@@ -13,5 +13,6 @@ public static class IngestionDatabaseInitializer
             try { await db.Database.MigrateAsync(); return; }
             catch (Exception ex) when (attempt < 10) { logger.LogWarning(ex, "Migration attempt {Attempt} failed; retrying.", attempt); await Task.Delay(TimeSpan.FromSeconds(2)); }
         }
+        throw new InvalidOperationException("Database migrations failed after 10 attempts.");
     }
 }
